@@ -1,0 +1,27 @@
+自力で書くようにしたTS-ASRのコード　9/16日現在はこれをメインに使って研究を進める
+
+
+コマンド
+
+# tmuxの作成
+tmux new -s train
+
+#移動
+cd ~/M1_research/IC-SOT
+
+# 仮想環境を有効化
+source ../medical_asr_system/medical_asr_system/bin/activate
+
+
+
+
+
+#一連の学習コードが回るか小規模のデータで確認するためのデバッグ用の実行方法
+DEBUG=1 python train.py
+DEBUG=1 python test.py
+確認し終わったらチェックポイント削除
+
+#本番用
+python train.py
+python test.py
+

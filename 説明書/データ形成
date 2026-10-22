@@ -1,0 +1,29 @@
+CEJCデータセット処理方法
+
+luu_list.py
+CEJC の全会話の luu.csv のパスを 1 つの CSV にまとめる。
+
+audio_list.py
+CEJC の全録音ファイルのパスを 1 つの CSV にまとめる。
+
+utterance_groups.py
+luu.csvをみて複数の発話を発話グループにまとめ、groups/groups_{会話ID}.csvに出力
+luu.csvに発話グループIDを追加したリストを出力　labeled/labeled_{会話ID}.csv
+
+cejc_normalize.py
+labeled_{会話ID}.csvの正解テキスト内のタグを規則に従って変換する
+
+sa_text.py　
+SOT形式で発話グループの書き起こしテキストを出力　sa/sa_{会話ID}.csv
+
+split.py
+データセットを協力者単位でtrain test devに分ける
+
+mak_2spk.py
+2話者のみ発話されているデータを使いtrainで読み込ませられる形にする。
+
+
+
+
+mak_2spk_timestamp.py
+2話者のみ発話されているデータを使いtrainで読み込ませられる形にする。
