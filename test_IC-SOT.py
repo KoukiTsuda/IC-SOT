@@ -9,7 +9,7 @@ os.environ["MKL_NUM_THREADS"] = "1"
 
 
 BASE_MODEL = "openai/whisper-medium"  # Whisper のモデル名
-TRAINED_MODEL  = "/home/tsuda/M1_research/IC-SOT/IC-SOT-weight/checkpoint-39270"  # 学習済みモデルのフォルダ
+TRAINED_MODEL  = "/home/tsuda/M1_research/IC-SOT/IC-SOT-weight/checkpoint-32130"  # 学習済みモデルのフォルダ
 #TEST_CSV = "/home/tsuda/M1_research/IC-SOT/make_data_IC/out/2spk_timestamp"  # テストCSVのあるフォルダ
 TEST_CSV = "/home/tsuda/M1_research/IC-SOT/make_data_名市大/out/2spk_timestamp"  # テストCSVのあるフォルダ
 EVAL_TMP = "/home/tsuda/M1_research/IC-SOT/eval_tmp"  # 一時ファイルの置き場
