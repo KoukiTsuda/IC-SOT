@@ -14,7 +14,7 @@ import glob
 import os
 
 # ===== 設定 =====
-ANNOTATION_DIR = "/home/tsuda/dataset/名市大/annotation"              # 探すフォルダ
+ANNOTATION_DIR = "/home/tsuda/dataset/名市大/annotation/ver2"              # 探すフォルダ
 OUTPUT_CSV = "out/luu_list.csv"    # 出力先
 # ================
 

@@ -18,7 +18,7 @@ CEJC の長い発話単位(luu)CSV の転記テキストから転記タグを処
   (D ..) (F ..) (I ..) (B ..) (時間) (.) → もろとも削除
   (T ..) (C ..) (M ..)                   → 中身を残す(単独は削除)
   (L ..)                                 → 中身を残す、単独は削除、＃が混ざる場合 <unknown>
-  (S ..)                                 → 中身を残す、単独は削除、(S ＊) は <sing>
+  (S ..)                                 → <sing>に置き換え
   (U 候補1/候補2..)                      → 第一候補(空なら次の空でない候補)、＃が混ざる場合 <unknown>
   (X ..) (O ..)                          → 中身を出力、＃が混ざる場合 <unknown>
   (R ..)                                 → <beep>
@@ -63,13 +63,6 @@ _PROTECT = {tok: chr(0xE000 + i) for i, tok in enumerate(SPECIAL_TOKENS)}
 _RESTORE = {v: k for k, v in _PROTECT.items()}
 
 
-
-# 聞き取れない部分の記号。CEJC は全角 ＃、名市大のアノテーションは半角 #
-# 場当たり的な対処なので考えとく
-def _has_sharp(s):
-    return "＃" in s or "#" in s
-
-
 def _apply_tag(tag, content, warn):
     """一番内側のタグ 1 個を規則に従って置き換えた文字列を返す"""
     # ポーズ (0.736) / (.)
@@ -80,18 +73,18 @@ def _apply_tag(tag, content, warn):
     if tag in "TCM":
         return content
     if tag == "L":
-        return UNKNOWN if _has_sharp(content) else content
+        return UNKNOWN if SHARP in content else content
     if tag == "S":
-        return SING if content == "＊" else content
+        return SING 
     if tag == "R":
         return BEEP
     if tag in "XO":
-        return UNKNOWN if _has_sharp(content) else content
+        return UNKNOWN if SHARP in content else content
     if tag == "U":
         cands = content.split("/")
         # 第一候補が空(内側の (D ..) 等が消えた)なら次の空でない候補を使う
         chosen = next((c for c in cands if c.strip()), "")
-        return UNKNOWN if _has_sharp(chosen) else chosen
+        return UNKNOWN if SHARP in chosen else chosen
     if tag in "WKYG":
         parts = content.split("|")
         if len(parts) != 2:

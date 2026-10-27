@@ -18,7 +18,7 @@ CEJC の長い発話単位(luu)CSV の転記テキストから転記タグを処
   (D ..) (F ..) (I ..) (B ..) (時間) (.) → もろとも削除
   (T ..) (C ..) (M ..)                   → 中身を残す(単独は削除)
   (L ..)                                 → 中身を残す、単独は削除、＃が混ざる場合 <unknown>
-  (S ..)                                 → 中身を残す、単独は削除、(S ＊) は <sing>
+  (S ..)                                 → <sing>に置き換え
   (U 候補1/候補2..)                      → 第一候補(空なら次の空でない候補)、＃が混ざる場合 <unknown>
   (X ..) (O ..)                          → 中身を出力、＃が混ざる場合 <unknown>
   (R ..)                                 → <beep>
@@ -75,7 +75,7 @@ def _apply_tag(tag, content, warn):
     if tag == "L":
         return UNKNOWN if SHARP in content else content
     if tag == "S":
-        return SING if content == "＊" else content
+        return SING 
     if tag == "R":
         return BEEP
     if tag in "XO":

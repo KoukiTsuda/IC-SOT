@@ -37,20 +37,23 @@ def read_luu_list(path):
     with open(path, encoding="utf-8-sig", newline="") as f:
         return [r["luu_csv"] for r in csv.DictReader(f)]
 
-# アノテーション CSV にはヘッダーが無いので、列名をこちらで付ける
-input_fields = ["IC", "speaker", "startClock", "startTime", "endClock", "endTime",
-          "durationClock", "duration", "text"]
+
+FIELDNAMES = [
+    "IC", "speakerName",
+    "startHMS", "startTime",
+    "endHMS", "endTime",
+    "durHMS", "duration",
+    "text",
+]
 
 def read_utterances(path):
     # CEJC の luu.csv は Shift-JIS(cp932)
     with open(path, encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f, fieldnames=input_fields) 
+        reader = csv.DictReader(f, fieldnames=FIELDNAMES)
         rows = []
         for r in reader:
             r["startTime"] = float(r["startTime"])
             r["endTime"] = float(r["endTime"])
-            r["IC"] = r["IC"]
-            r["speakerName"] = r["speaker"]  # 患者, 看護師 …
             rows.append(r)
     return rows
 
@@ -99,8 +102,8 @@ def summarize(groups, conv_id):
 
 def process_one(luu_csv):
     """1 会話分の luu.csv をグループ分けして CSV を保存し、グループ数を返す"""
-    # 拡張子の前後で分ける "2025-10-02_23.15.21.csv" → "2025-10-02_23.15.21"
-    conv_id = os.path.splitext(os.path.basename(luu_csv))[0]
+    # C001_001-luu.csv / K001_003a-luu.csv → C001_001 / K001_003a
+    conv_id = os.path.splitext(os.path.basename(luu_csv))[0].removesuffix("-luu")
 
     #luu.csvのstartTimeとendTimeを文字列型からfloat型に変換して返す
     rows = read_utterances(luu_csv)

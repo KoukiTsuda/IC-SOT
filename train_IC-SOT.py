@@ -14,10 +14,10 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
 
-BASE_MODEL = "openai/whisper-medium"  # Whisper のモデル名
+BASE_MODEL            = "openai/whisper-medium"  # Whisper のモデル名
 EXPORT_TRAINED_MODEL  = "/home/tsuda/M1_research/IC-SOT/IC-SOT-weight"  # 学習済みモデルの保存フォルダ
-TRAIN_CSV_ROOT = "/home/tsuda/M1_research/IC-SOT/make_data_IC/out/2spk_timestamp"  # 学習用CSVのあるフォルダ
-NORMALIZE_DIR = "/home/tsuda/M1_research/IC-SOT/make_data_IC" # テキスト正規化のファイル、句読点削除に使用
+TRAIN_CSV_ROOT        = "/home/tsuda/M1_research/IC-SOT/make_data_IC/out/1and2spk_timestamp"  # 学習用CSVのあるフォルダ
+NORMALIZE_DIR         = "/home/tsuda/M1_research/IC-SOT/make_data_IC" # テキスト正規化のファイル、句読点削除に使用
 
 ts_dataset = load_dataset(
     "csv",
@@ -46,7 +46,8 @@ DEBUG = os.environ.get("DEBUG", "0") == "1"
 if DEBUG:
     ts_dataset["train"] = ts_dataset["train"].select(range(32))
     ts_dataset["dev"]   = ts_dataset["dev"].select(range(8))
-    ts_dataset["test"]  = ts_dataset["test"].select(range(8))
+    # 本番の重みを上書きしないよう保存先を分ける
+    EXPORT_TRAINED_MODEL = EXPORT_TRAINED_MODEL + "-debug"
 
 #プロセッサーの作成（音声→音響特徴量、テキスト→ベクトルに変換する前処理をしてくれる）
 from transformers import WhisperFeatureExtractor
@@ -75,11 +76,31 @@ import soundfile as sf
 
 # 適当な使わない言語トークンをSCトークンとして流用
 SC_ID = tokenizer.convert_tokens_to_ids("<|bo|>")  # チベット語
+UNKNOWN_ID = tokenizer.convert_tokens_to_ids("<|haw|>")  # ハワイ語
+SING_ID = tokenizer.convert_tokens_to_ids("<|ln|>")  # リンガラ語
+BEEP_ID = tokenizer.convert_tokens_to_ids("<|ba|>")  # バシキール語
 
 # デコーダ入力時の特殊トークン
 SOT_ID         = tokenizer.convert_tokens_to_ids("<|startoftranscript|>")
 LANG_ID        = tokenizer.convert_tokens_to_ids("<|ja|>")
 TASK_ID        = tokenizer.convert_tokens_to_ids("<|transcribe|>")
+
+import re
+
+TAG2ID = {"<unknown>": UNKNOWN_ID, "<sing>": SING_ID, "<beep>": BEEP_ID}
+TAG_RE = re.compile("(" + "|".join(map(re.escape, TAG2ID)) + ")")
+
+# <unkown> <sing> <beep> の処理
+def encode_text(text):
+    ids = []
+    for part in TAG_RE.split(text):
+        if not part:
+            continue
+        if part in TAG2ID:
+            ids.append(TAG2ID[part])
+        else:
+            ids += tokenizer(part, add_special_tokens=False).input_ids
+    return ids
 
 # タイムスタンプトークンを得る
 def get_timestamp_token_id(seconds: float) -> int:
@@ -90,7 +111,7 @@ def get_timestamp_token_id(seconds: float) -> int:
 #生データをモデルが扱えるようにする関数
 def prepare_dataset(batch):
     # CH1・CH2それぞれの音声を読み込む
-    # load_segment の中で 16kHz モノラルに揃えているので、戻り値は音声の配列だけ
+    # load_segment の中で 16kHz モノラルに揃えているので、戻り値は音声の配列だけ ←そんなことなくね？
     ch1_audio = load_segment(batch["IC1_audio_path"], batch["startTime"], batch["endTime"])
     ch2_audio = load_segment(batch["IC2_audio_path"], batch["startTime"], batch["endTime"])
 
@@ -107,11 +128,11 @@ def prepare_dataset(batch):
 
     labels = [SOT_ID, LANG_ID, TASK_ID]
     for seg in segs1:
-        ids = tokenizer(seg["text"], add_special_tokens=False).input_ids
+        ids = encode_text(seg["text"])  
         labels += [get_timestamp_token_id(seg["start"])] + ids + [get_timestamp_token_id(seg["end"])]
     labels += [SC_ID]   # ← 話者切り替わりの境界に1個だけ
     for seg in segs2:
-        ids = tokenizer(seg["text"], add_special_tokens=False).input_ids
+        ids = encode_text(seg["text"])  
         labels += [get_timestamp_token_id(seg["start"])] + ids + [get_timestamp_token_id(seg["end"])]
     labels += [tokenizer.eos_token_id]
 
@@ -268,7 +289,7 @@ training_args = Seq2SeqTrainingArguments(
     per_device_train_batch_size=16,    # GPU１台あたり16件のデータを処理する
     gradient_accumulation_steps=1,     # バッチをいくつためてから勾配を計算するかの設定。
     learning_rate=1e-5,                # 学習率
-    num_train_epochs=11,               # 学習する総エポック数を指定
+    num_train_epochs=4,               # 学習する総エポック数を指定
     save_total_limit=4,
     eval_strategy="epoch",             # 評価のタイミングをエポック単位で行う
     save_strategy="epoch",             # モデルの保存を行うエポック数
@@ -301,4 +322,4 @@ trainer = Seq2SeqTrainer(
     processing_class=processor.feature_extractor,  #トークナイザー
 )
 
-trainer.train()
+trainer.train(resume_from_checkpoint=f"{EXPORT_TRAINED_MODEL}/checkpoint-11604")  # 学習再開する場合はコメントアウトを外す

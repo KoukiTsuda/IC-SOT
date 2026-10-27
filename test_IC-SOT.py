@@ -8,18 +8,19 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
 
-BASE_MODEL = "openai/whisper-medium"  # Whisper のモデル名
-TRAINED_MODEL  = "/home/tsuda/M1_research/IC-SOT/IC-SOT-weight/checkpoint-32130"  # 学習済みモデルのフォルダ
-#TEST_CSV = "/home/tsuda/M1_research/IC-SOT/make_data_IC/out/2spk_timestamp"  # テストCSVのあるフォルダ
-TEST_CSV = "/home/tsuda/M1_research/IC-SOT/make_data_名市大/out/2spk_timestamp"  # テストCSVのあるフォルダ
-EVAL_TMP = "/home/tsuda/M1_research/IC-SOT/eval_tmp"  # 一時ファイルの置き場
-NORMALIZE_DIR = "/home/tsuda/M1_research/IC-SOT/make_data_IC" # テキスト正規化のファイル、句読点削除に使用
+BASE_MODEL     = "openai/whisper-medium"  # Whisper のモデル名
+TRAINED_MODEL  = "/home/tsuda/M1_research/IC-SOT/IC-SOT-weight/checkpoint-46416"  # 学習済みモデルのフォルダ
+TEST_CSV_ROOT  = "/home/tsuda/M1_research/IC-SOT/make_data_IC/out/1and2spk_timestamp"  # テストCSVのあるフォルダ
+#TEST_CSV      = "/home/tsuda/M1_research/IC-SOT/make_data_名市大/out/1and2spk_timestamp"  # テストCSVのあるフォルダ
+EVAL_TMP       = "/home/tsuda/M1_research/IC-SOT/eval_tmp"  # 一時ファイルの置き場
+NORMALIZE_DIR  = "/home/tsuda/M1_research/IC-SOT/make_data_IC" # テキスト正規化のファイル、句読点削除に使用
+RESULT_CSV     = "result/test_predictions_timestamp.csv"  # 推論結果の保存先
 
 ts_dataset = load_dataset(
     "csv",
     data_files={
         #"test":  "/home/tsuda/M1_research/IC-SOT/make_data_IC/out/2spk_timestamp/test.csv",
-        "test":  f"{TEST_CSV}/test.csv",
+        "test":  f"{TEST_CSV_ROOT}/test.csv",
     },
     keep_default_na=False,
 )
@@ -67,11 +68,30 @@ import soundfile as sf
 
 # 適当な使わない言語トークンをSCトークンとして流用
 SC_ID = tokenizer.convert_tokens_to_ids("<|bo|>")  # チベット語
+UNKNOWN_ID = tokenizer.convert_tokens_to_ids("<|haw|>")  # ハワイ語
+SING_ID = tokenizer.convert_tokens_to_ids("<|ln|>")  # リンガラ語
+BEEP_ID = tokenizer.convert_tokens_to_ids("<|ba|>")  # バシキール語
 
 # デコーダ入力時の特殊トークン
 SOT_ID         = tokenizer.convert_tokens_to_ids("<|startoftranscript|>")
 LANG_ID        = tokenizer.convert_tokens_to_ids("<|ja|>")
 TASK_ID        = tokenizer.convert_tokens_to_ids("<|transcribe|>")
+
+import re
+TAG2ID = {"<unknown>": UNKNOWN_ID, "<sing>": SING_ID, "<beep>": BEEP_ID}
+TAG_RE = re.compile("(" + "|".join(map(re.escape, TAG2ID)) + ")")
+
+# <unkown> <sing> <beep> の処理
+def encode_text(text):
+    ids = []
+    for part in TAG_RE.split(text):
+        if not part:
+            continue
+        if part in TAG2ID:
+            ids.append(TAG2ID[part])
+        else:
+            ids += tokenizer(part, add_special_tokens=False).input_ids
+    return ids
 
 # タイムスタンプトークンを得る
 def get_timestamp_token_id(seconds: float) -> int:
@@ -96,19 +116,18 @@ def prepare_dataset(batch):
     # 正解テキスト: 話者1・話者2のテキストファイルを読み込む
     segs1 = json.loads(batch["IC1_segments"])
     segs2 = json.loads(batch["IC2_segments"])
-    
+
     labels = [SOT_ID, LANG_ID, TASK_ID]
     for seg in segs1:
-        ids = tokenizer(seg["text"], add_special_tokens=False).input_ids
+        ids = encode_text(seg["text"])  
         labels += [get_timestamp_token_id(seg["start"])] + ids + [get_timestamp_token_id(seg["end"])]
     labels += [SC_ID]   # ← 話者切り替わりの境界に1個だけ
     for seg in segs2:
-        ids = tokenizer(seg["text"], add_special_tokens=False).input_ids
+        ids = encode_text(seg["text"])  
         labels += [get_timestamp_token_id(seg["start"])] + ids + [get_timestamp_token_id(seg["end"])]
     labels += [tokenizer.eos_token_id]
     
     batch["labels"] = labels
-            
 
     return batch
 
@@ -124,7 +143,7 @@ ts_dataset["test"] = ts_dataset["test"].map(
     num_proc=1,
     writer_batch_size=1,
 )
-
+print("test 最大ラベル長:", max(len(l) for l in ts_dataset["test"]["labels"]))
 
 #モデルの2ch入力対応　
 #whisperの音声認識モデルのクラス（WhisperForConditionalGeneration）を継承して実現してる
@@ -259,10 +278,13 @@ pred_ids  = np.where(results.predictions == -100, tokenizer.pad_token_id, result
 label_ids = np.where(results.label_ids   == -100, tokenizer.pad_token_id, results.label_ids)
 
 def to_text(ids):
-    s = tokenizer.decode(ids, skip_special_tokens=False)
+    s = tokenizer.decode(ids, skip_special_tokens=False, decode_with_timestamps=True)
     for t in ["<|startoftranscript|>", "<|ja|>", "<|transcribe|>", "<|endoftext|>"]:
         s = s.replace(t, "")
-    return s.replace("<|bo|>", " [SC] ").strip()
+    return s.replace("<|bo|>", " [SC] ")     \
+            .replace("<|haw|>", "<unknown>") \
+            .replace("<|ln|>", "<sing>")     \
+            .replace("<|ba|>", "<beep>").strip()
 
 rows = []
 for k in range(len(pred_ids)):
@@ -272,4 +294,5 @@ for k in range(len(pred_ids)):
         "pred": to_text(pred_ids[k]),    # 推論
     })
 
-pd.DataFrame(rows).to_csv("test_predictions_timestamp.csv", index=False, encoding="utf-8-sig")
+os.makedirs(os.path.dirname(RESULT_CSV), exist_ok=True)
+pd.DataFrame(rows).to_csv(RESULT_CSV, index=False, encoding="utf-8-sig")

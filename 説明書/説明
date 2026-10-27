@@ -12,16 +12,19 @@ cd ~/M1_research/IC-SOT
 # 仮想環境を有効化
 source ../medical_asr_system/medical_asr_system/bin/activate
 
-
-
-
+圧縮
+cd /home/tsuda/M1_research
+zip -r IC-SOT.zip IC-SOT -x "IC-SOT/IC-SOT-weight/*" "IC-SOT/eval_tmp/*"
 
 #一連の学習コードが回るか小規模のデータで確認するためのデバッグ用の実行方法
-DEBUG=1 python train.py
-DEBUG=1 python test.py
+DEBUG=1 python train_IC-SOT.py
+DEBUG=1 python test_IC-SOT.py
 確認し終わったらチェックポイント削除
 
+#ログの超す
+python train_IC-SOT.py 2>&1 | tee train_$(date +%m%d_%H%M).log
+
 #本番用
-python train.py
-python test.py
+python train_IC-SOT.py
+python test_IC-SOT.py
 
